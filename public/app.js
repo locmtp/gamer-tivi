@@ -114,6 +114,18 @@ function fillCountrySelects() {
     for (const [code] of COUNTRIES) sel.add(new Option(countryLabel(code), code));
   }
 }
+// Ảnh game: đặt file vào public/img/<id>.png (hoặc .jpg/.webp), ví dụ public/img/lol.png.
+// Nếu chưa có ảnh thì hiện biểu tượng emoji thay thế.
+const IMG_EXT = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+function setGameIcon(box, g) {
+  box.textContent = g.icon;
+  let i = 0;
+  const img = new Image();
+  img.alt = '';
+  img.onload = () => { box.textContent = ''; box.classList.add('has-img'); box.append(img); };
+  img.onerror = () => { if (++i < IMG_EXT.length) img.src = `img/${g.id}.${IMG_EXT[i]}`; };
+  img.src = `img/${g.id}.${IMG_EXT[0]}`;
+}
 function renderGames() {
   const box = $('#games');
   box.innerHTML = '';
@@ -124,7 +136,7 @@ function renderGames() {
     b.setAttribute('aria-checked', g.id === state.game);
     b.style.setProperty('--c', g.color);
     b.innerHTML = '<span class="ico"></span><span class="nm"></span>';
-    $('.ico', b).textContent = g.icon;
+    setGameIcon($('.ico', b), g);
     $('.nm', b).textContent = g.name;
     b.addEventListener('click', () => {
       state.game = g.id;
