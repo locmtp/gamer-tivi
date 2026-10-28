@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gamer Tivi – Ghép cặp game thủ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c3aed'/%3E%3Cpath d='M9 12h14a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3v-4a3 3 0 0 1 3-3z' fill='%2322d3ee'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="toasts" aria-live="polite"></div>
+
+<!-- ĐĂNG NHẬP / ĐĂNG KÝ -->
+<section id="view-auth" class="view" hidden>
+  <div class="auth-card">
+    <div class="brand big"><span class="logo">🎮</span><span>GAMER<b>TIVI</b></span></div>
+    <p class="muted center">Tìm đồng đội ngẫu nhiên, gặp mặt qua video call.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="login" role="tab">Đăng nhập</button>
+      <button class="tab" data-tab="register" role="tab">Đăng ký</button>
+    </div>
+    <form id="form-login" class="form">
+      <label>Tên đăng nhập<input name="username" autocomplete="username" required></label>
+      <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="error" role="alert"></p>
+      <button class="btn primary block" type="submit">Đăng nhập</button>
+    </form>
+    <form id="form-register" class="form" hidden>
+      <label>Tên hiển thị<input name="name" maxlength="30" autocomplete="nickname" placeholder="VD: Faker Việt"></label>
+      <label>Tên đăng nhập<input name="username" autocomplete="username" required pattern="[a-zA-Z0-9_.]{3,20}" title="3-20 ký tự: chữ, số, _ hoặc ."></label>
+      <label>Mật khẩu (từ 6 ký tự)<input name="password" type="password" minlength="6" autocomplete="new-password" required></label>
+      <p class="error" role="alert"></p>
+      <button class="btn primary block" type="submit">Tạo tài khoản</button>
+    </form>
+  </div>
+</section>
+
+<!-- TRANG CHỦ -->
+<section id="view-home" class="view" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="logo">🎮</span><span>GAMER<b>TIVI</b></span></div>
+    <div class="menu-wrap">
+      <button id="menu-btn" class="user-btn" aria-haspopup="menu" aria-expanded="false">
+        <span class="avatar" id="avatar">?</span>
+        <span id="menu-name" class="uname"></span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      <ul id="menu" class="menu" role="menu" hidden>
+        <li role="menuitem"><button data-act="profile">👤 Thay đổi thông tin</button></li>
+        <li role="menuitem"><button data-act="password">🔑 Đổi mật khẩu</button></li>
+        <li role="menuitem"><button data-act="camera">📷 Tuỳ chỉnh camera</button></li>
+        <li class="sep" role="separator"></li>
+        <li role="menuitem"><button data-act="logout">⎋ Đăng xuất</button></li>
+      </ul>
+    </div>
+  </header>
+
+  <main class="home">
+    <div class="hero">
+      <h1>Chọn game, <span class="grad">tìm bạn chơi</span></h1>
+      <p class="muted">Ghép ngẫu nhiên với game thủ cùng game và cùng khu vực.</p>
+    </div>
+
+    <h2 class="step"><span>1</span> Bạn chơi game nào?</h2>
+    <div id="games" class="games" role="radiogroup" aria-label="Chọn trò chơi"></div>
+
+    <h2 class="step"><span>2</span> Khu vực</h2>
+    <div class="country-row">
+      <select id="country" aria-label="Chọn quốc gia"></select>
+      <p class="muted small">Chỉ ghép với người cùng quốc gia. Chọn “Tất cả quốc gia” để gặp người từ mọi nơi.</p>
+    </div>
+
+    <div class="cta">
+      <button id="start" class="btn primary huge">▶ Bắt đầu ghép cặp</button>
+      <p class="muted small"><span class="dot"></span><span id="stats">Đang kết nối…</span></p>
+    </div>
+  </main>
+</section>
+
+<!-- CUỘC GỌI -->
+<section id="view-call" class="view" hidden>
+  <div class="stage">
+    <video id="remote" autoplay playsinline></video>
+    <div id="overlay" class="overlay">
+      <div class="spinner"></div>
+      <p id="overlay-text">Đang tìm bạn chơi…</p>
+      <p id="overlay-sub" class="muted small"></p>
+    </div>
+    <div id="peer-tag" class="peer-tag" hidden></div>
+    <div class="pip"><video id="local" autoplay playsinline muted></video></div>
+  </div>
+
+  <div class="filters-bar" aria-label="Bộ lọc màu camera">
+    <span class="fl-label">🎨 Filter</span>
+    <div id="filters" class="filters"></div>
+  </div>
+
+  <div class="controls">
+    <button id="btn-mic" class="round" title="Bật/tắt micro">🎤</button>
+    <button id="btn-cam" class="round" title="Bật/tắt camera">📹</button>
+    <button id="btn-next" class="btn primary">⏭ Người tiếp theo</button>
+    <button id="btn-settings" class="round" title="Tuỳ chỉnh camera">⚙️</button>
+    <button id="btn-stop" class="btn danger">⏹ Dừng</button>
+  </div>
+</section>
+
+<!-- HỘP THOẠI -->
+<dialog id="dlg-profile">
+  <form method="dialog" class="form" id="form-profile">
+    <h3>Thay đổi thông tin</h3>
+    <label>Tên hiển thị<input name="name" maxlength="30" required></label>
+    <label>Quốc gia mặc định<select name="country"></select></label>
+    <p class="error" role="alert"></p>
+    <div class="actions"><button type="button" class="btn ghost" data-close>Huỷ</button><button class="btn primary" type="submit">Lưu</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-password">
+  <form method="dialog" class="form" id="form-password">
+    <h3>Đổi mật khẩu</h3>
+    <label>Mật khẩu hiện tại<input name="old" type="password" autocomplete="current-password" required></label>
+    <label>Mật khẩu mới<input name="new" type="password" minlength="6" autocomplete="new-password" required></label>
+    <label>Nhập lại mật khẩu mới<input name="again" type="password" minlength="6" autocomplete="new-password" required></label>
+    <p class="error" role="alert"></p>
+    <div class="actions"><button type="button" class="btn ghost" data-close>Huỷ</button><button class="btn primary" type="submit">Đổi mật khẩu</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-camera" class="wide">
+  <form method="dialog" class="form" id="form-camera">
+    <h3>Tuỳ chỉnh camera</h3>
+    <div class="cam-grid">
+      <div class="cam-preview"><video id="cam-preview" autoplay playsinline muted></video><p id="cam-msg" class="muted small center"></p></div>
+      <div class="cam-opts">
+        <label>Camera<select id="opt-video"></select></label>
+        <label>Micro<select id="opt-audio"></select></label>
+        <label>Độ phân giải
+          <select id="opt-res"><option value="360">360p (tiết kiệm)</option><option value="720">720p (HD)</option><option value="1080">1080p (Full HD)</option></select>
+        </label>
+        <label>Độ sáng <output id="out-bright"></output><input id="opt-bright" type="range" min="50" max="160" step="5"></label>
+        <label>Độ tương phản <output id="out-contrast"></output><input id="opt-contrast" type="range" min="50" max="160" step="5"></label>
+        <label class="check"><input id="opt-mirror" type="checkbox"> Lật gương khung hình của tôi</label>
+        <button type="button" id="cam-reset" class="btn ghost small">Đặt lại mặc định</button>
+      </div>
+    </div>
+    <div class="actions"><button class="btn primary" type="submit">Xong</button></div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

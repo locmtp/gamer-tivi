@@ -1,0 +1,8 @@
+{
+  "name": "gamer-tivi",
+  "version": "1.0.0",
+  "description": "Ghép cặp game thủ ngẫu nhiên qua video call",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": {}
+}
