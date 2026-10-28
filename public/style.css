@@ -149,3 +149,7 @@ dialog h3 { margin: 0 0 4px; font-size: 1.2rem; }
   #view-call { padding: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.link { background: none; border: 0; color: var(--cyan); cursor: pointer; text-align: center; padding: 4px; font-size: .9rem; }
+.link:hover { text-decoration: underline; }
+.ok-msg { color: var(--ok); }

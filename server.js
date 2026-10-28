@@ -3,6 +3,16 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const net = require('net');
+const tls = require('tls');
+
+// Đọc cấu hình từ file .env (nếu có): GMAIL_USER, GMAIL_APP_PASSWORD...
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch {}
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -59,7 +69,9 @@ function readToken(token) {
     return u;
   } catch { return null; }
 }
-const publicUser = (u) => ({ username: u.username, name: u.name, country: u.country });
+const publicUser = (u) => ({ username: u.username, name: u.name, country: u.country, email: u.email || '' });
+const GMAIL_RE = /^[a-z0-9._%+-]{3,64}@(gmail|googlemail)\.com$/;
+const findByEmail = (email) => Object.values(users).find((u) => u.email === email);
 
 // ---------- Giới hạn tần suất đơn giản ----------
 const hits = new Map();
@@ -70,7 +82,57 @@ function limited(ip, max = 20, windowMs = 60000) {
   hits.set(ip, arr);
   return arr.length > max;
 }
-setInterval(() => hits.clear(), 10 * 60000).unref();
+setInterval(() => { hits.clear(); for (const [k, v] of resetCodes) if (v.exp < Date.now()) resetCodes.delete(k); }, 10 * 60000).unref();
+
+// ---------- Gửi email qua SMTP (Gmail: smtp.gmail.com:465 + Mật khẩu ứng dụng) ----------
+function mailConfigured() { return !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD); }
+function sendMail(to, subject, text) {
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const port = +process.env.SMTP_PORT || 465;
+  const secure = process.env.SMTP_SECURE !== 'false';
+  const user = process.env.GMAIL_USER, pass = String(process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
+  const b64 = (x) => Buffer.from(x).toString('base64');
+  const body = b64(text).replace(/(.{76})/g, '$1\r\n');
+  const msg = [`From: Gamer Tivi <${user}>`, `To: ${to}`, `Subject: =?UTF-8?B?${b64(subject)}?=`, 'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: base64', `Date: ${new Date().toUTCString()}`, '', body].join('\r\n');
+  return new Promise((resolve, reject) => {
+    const sock = secure ? tls.connect({ host, port, servername: host }) : net.connect({ host, port });
+    let buf = '', waiter = null, done = false;
+    const finish = (err) => { if (done) return; done = true; clearTimeout(timer); sock.destroy(); err ? reject(err) : resolve(); };
+    const timer = setTimeout(() => finish(new Error('SMTP timeout')), 20000);
+    sock.setEncoding('utf8');
+    sock.on('error', finish);
+    sock.on('close', () => finish(new Error('SMTP connection closed')));
+    sock.on('data', (d) => {
+      buf += d;
+      const lines = buf.split('\r\n');
+      buf = lines.pop();
+      for (const l of lines) if (/^\d{3} /.test(l) && waiter) { const w = waiter; waiter = null; w(l); }
+    });
+    const reply = () => new Promise((r) => (waiter = r));
+    const cmd = async (line, ok) => {
+      if (line !== null) sock.write(line + '\r\n');
+      const r = await reply();
+      if (!r.startsWith(String(ok))) throw new Error('SMTP ' + r);
+    };
+    (async () => {
+      await new Promise((r, j) => { waiter = (l) => (l.startsWith('220') ? r() : j(new Error('SMTP ' + l))); });
+      await cmd('EHLO gamertivi.local', 250);
+      await cmd('AUTH LOGIN', 334);
+      await cmd(b64(user), 334);
+      await cmd(b64(pass), 235);
+      await cmd(`MAIL FROM:<${user}>`, 250);
+      await cmd(`RCPT TO:<${to}>`, 250);
+      await cmd('DATA', 354);
+      await cmd(msg + '\r\n.', 250);
+      sock.write('QUIT\r\n');
+      finish();
+    })().catch(finish);
+  });
+}
+
+const resetCodes = new Map(); // email -> { hash, exp, tries, sentAt }
+const codeHash = (email, code) => crypto.createHmac('sha256', SECRET).update(email + ':' + code).digest('hex');
 
 // ---------- HTTP: API + file tĩnh ----------
 const PUBLIC = path.join(__dirname, 'public');
@@ -99,11 +161,14 @@ route('POST', '/api/register', async (req, res, body) => {
   const username = String(body.username || '').trim().toLowerCase();
   const password = String(body.password || '');
   const name = cleanName(body.name) || username;
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!GMAIL_RE.test(email)) return json(res, 400, { error: 'Hãy nhập địa chỉ Gmail hợp lệ (dạng ten@gmail.com)' });
+  if (findByEmail(email)) return json(res, 409, { error: 'Gmail này đã được dùng cho tài khoản khác' });
   if (!/^[a-z0-9_.]{3,20}$/.test(username)) return json(res, 400, { error: 'Tên đăng nhập 3-20 ký tự: chữ thường, số, _ hoặc .' });
   if (password.length < 6 || password.length > 100) return json(res, 400, { error: 'Mật khẩu phải từ 6 ký tự' });
   if (Object.prototype.hasOwnProperty.call(users, username)) return json(res, 409, { error: 'Tên đăng nhập đã tồn tại' });
   const { salt, hash } = await hashPassword(password);
-  users[username] = { username, name, salt, hash, ver: 1, country: 'VN', createdAt: Date.now() };
+  users[username] = { username, name, email, salt, hash, ver: 1, country: 'VN', createdAt: Date.now() };
   saveUsers();
   json(res, 200, { token: makeToken(users[username]), user: publicUser(users[username]) });
 });
@@ -129,6 +194,13 @@ route('PUT', '/api/profile', (req, res, body) => {
   const country = String(body.country || '');
   if (!name) return json(res, 400, { error: 'Tên hiển thị không được trống' });
   if (!isCountry(country)) return json(res, 400, { error: 'Quốc gia không hợp lệ' });
+  const email = String(body.email || '').trim().toLowerCase();
+  if (email && email !== u.email) {
+    if (!GMAIL_RE.test(email)) return json(res, 400, { error: 'Hãy nhập địa chỉ Gmail hợp lệ (dạng ten@gmail.com)' });
+    const other = findByEmail(email);
+    if (other && other !== u) return json(res, 409, { error: 'Gmail này đã được dùng cho tài khoản khác' });
+    u.email = email;
+  }
   u.name = name;
   u.country = country;
   saveUsers();
@@ -147,6 +219,47 @@ route('PUT', '/api/password', async (req, res, body) => {
   saveUsers();
   kickUser(u.username); // ngắt các kết nối cũ
   json(res, 200, { token: makeToken(u) });
+});
+
+route('POST', '/api/forgot', async (req, res, body) => {
+  if (limited(ipOf(req), 6)) return json(res, 429, { error: 'Thử quá nhiều lần, hãy đợi một lúc' });
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!GMAIL_RE.test(email)) return json(res, 400, { error: 'Hãy nhập địa chỉ Gmail hợp lệ' });
+  const reply = { ok: true, message: 'Nếu Gmail này đã đăng ký, mã xác nhận đã được gửi. Mã có hiệu lực 10 phút.' };
+  const user = findByEmail(email);
+  const prev = resetCodes.get(email);
+  if (!user || (prev && Date.now() - prev.sentAt < 60000)) return json(res, 200, reply); // không tiết lộ email có tồn tại hay không
+  const code = String(crypto.randomInt(100000, 1000000));
+  resetCodes.set(email, { hash: codeHash(email, code), exp: Date.now() + 10 * 60000, tries: 0, sentAt: Date.now() });
+  const text = `Xin chào ${user.name},\n\nMã khôi phục mật khẩu Gamer Tivi của bạn là: ${code}\nMã có hiệu lực trong 10 phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.\n`;
+  if (!mailConfigured()) {
+    console.log(`[DEV] Chưa cấu hình Gmail. Mã khôi phục cho ${email}: ${code}`);
+  } else {
+    try { await sendMail(email, 'Mã khôi phục mật khẩu Gamer Tivi', text); }
+    catch (e) { console.error('Gửi mail lỗi:', e.message); resetCodes.delete(email); return json(res, 500, { error: 'Không gửi được email, hãy thử lại sau' }); }
+  }
+  json(res, 200, reply);
+});
+
+route('POST', '/api/reset', async (req, res, body) => {
+  if (limited(ipOf(req), 15)) return json(res, 429, { error: 'Thử quá nhiều lần, hãy đợi một lúc' });
+  const email = String(body.email || '').trim().toLowerCase();
+  const code = String(body.code || '').trim();
+  const np = String(body.newPassword || '');
+  if (np.length < 6 || np.length > 100) return json(res, 400, { error: 'Mật khẩu mới phải từ 6 ký tự' });
+  const entry = resetCodes.get(email);
+  const user = findByEmail(email);
+  const bad = () => json(res, 400, { error: 'Mã không đúng hoặc đã hết hạn' });
+  if (!entry || !user || entry.exp < Date.now()) return bad();
+  if (++entry.tries > 5) { resetCodes.delete(email); return bad(); }
+  const a = Buffer.from(codeHash(email, code), 'hex'), b = Buffer.from(entry.hash, 'hex');
+  if (!crypto.timingSafeEqual(a, b)) return bad();
+  resetCodes.delete(email);
+  const { salt, hash } = await hashPassword(np);
+  Object.assign(user, { salt, hash, ver: user.ver + 1 });
+  saveUsers();
+  kickUser(user.username);
+  json(res, 200, { token: makeToken(user), user: publicUser(user) });
 });
 
 const server = http.createServer(async (req, res) => {

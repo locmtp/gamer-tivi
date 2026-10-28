@@ -26,10 +26,12 @@
       <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required></label>
       <p class="error" role="alert"></p>
       <button class="btn primary block" type="submit">Đăng nhập</button>
+      <button type="button" class="link" id="open-forgot">Quên mật khẩu?</button>
     </form>
     <form id="form-register" class="form" hidden>
       <label>Tên hiển thị<input name="name" maxlength="30" autocomplete="nickname" placeholder="VD: Faker Việt"></label>
       <label>Tên đăng nhập<input name="username" autocomplete="username" required pattern="[a-zA-Z0-9_.]{3,20}" title="3-20 ký tự: chữ, số, _ hoặc ."></label>
+      <label>Gmail (để khôi phục mật khẩu)<input name="email" type="email" autocomplete="email" placeholder="ten@gmail.com" required pattern="[A-Za-z0-9._%+\-]+@(gmail|googlemail)\.com" title="Nhập địa chỉ Gmail, ví dụ ten@gmail.com"></label>
       <label>Mật khẩu (từ 6 ký tự)<input name="password" type="password" minlength="6" autocomplete="new-password" required></label>
       <p class="error" role="alert"></p>
       <button class="btn primary block" type="submit">Tạo tài khoản</button>
@@ -111,9 +113,24 @@
   <form method="dialog" class="form" id="form-profile">
     <h3>Thay đổi thông tin</h3>
     <label>Tên hiển thị<input name="name" maxlength="30" required></label>
+    <label>Gmail khôi phục mật khẩu<input name="email" type="email" placeholder="ten@gmail.com" pattern="[A-Za-z0-9._%+\-]+@(gmail|googlemail)\.com" title="Nhập địa chỉ Gmail, ví dụ ten@gmail.com"></label>
     <label>Quốc gia mặc định<select name="country"></select></label>
     <p class="error" role="alert"></p>
     <div class="actions"><button type="button" class="btn ghost" data-close>Huỷ</button><button class="btn primary" type="submit">Lưu</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-forgot">
+  <form method="dialog" class="form" id="form-forgot">
+    <h3>Quên mật khẩu</h3>
+    <p class="muted small" id="forgot-hint">Nhập Gmail đã đăng ký, chúng tôi sẽ gửi mã xác nhận 6 số.</p>
+    <label>Gmail<input name="email" type="email" autocomplete="email" placeholder="ten@gmail.com" required></label>
+    <div id="forgot-step2" class="form" hidden>
+      <label>Mã xác nhận (6 số)<input name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code"></label>
+      <label>Mật khẩu mới<input name="new" type="password" minlength="6" autocomplete="new-password"></label>
+    </div>
+    <p class="error" role="alert"></p>
+    <div class="actions"><button type="button" class="btn ghost" data-close>Huỷ</button><button class="btn primary" type="submit" id="forgot-submit">Gửi mã</button></div>
   </form>
 </dialog>
 

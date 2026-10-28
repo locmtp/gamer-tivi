@@ -183,6 +183,7 @@ $$('dialog [data-close]').forEach((b) => b.addEventListener('click', () => b.clo
 function openProfile() {
   const f = $('#form-profile');
   f.name.value = state.me.name;
+  f.email.value = state.me.email || '';
   f.country.value = state.me.country;
   $('.error', f).textContent = '';
   $('#dlg-profile').showModal();
@@ -191,7 +192,7 @@ $('#form-profile').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
   try {
-    const { user } = await api('PUT', '/api/profile', { name: f.name.value, country: f.country.value });
+    const { user } = await api('PUT', '/api/profile', { name: f.name.value, country: f.country.value, email: f.email.value });
     state.me = user;
     state.country = user.country;
     store.set('country', user.country);
@@ -200,6 +201,47 @@ $('#form-profile').addEventListener('submit', async (e) => {
     $('#dlg-profile').close();
     toast('Đã cập nhật thông tin');
   } catch (ex) { $('.error', f).textContent = ex.message; }
+});
+
+// Quên mật khẩu (khôi phục qua Gmail)
+let forgotStep = 1;
+$('#open-forgot').addEventListener('click', () => {
+  const f = $('#form-forgot');
+  f.reset();
+  forgotStep = 1;
+  $('#forgot-step2').hidden = true;
+  $('#forgot-submit').textContent = 'Gửi mã';
+  $('#forgot-hint').textContent = 'Nhập Gmail đã đăng ký, chúng tôi sẽ gửi mã xác nhận 6 số.';
+  $('.error', f).textContent = '';
+  f.email.readOnly = false;
+  f.code.required = f.new.required = false;
+  $('#dlg-forgot').showModal();
+});
+$('#form-forgot').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target, err = $('.error', f), btn = $('#forgot-submit');
+  err.classList.remove('ok-msg');
+  err.textContent = '';
+  btn.disabled = true;
+  try {
+    if (forgotStep === 1) {
+      const r = await api('POST', '/api/forgot', { email: f.email.value });
+      forgotStep = 2;
+      f.email.readOnly = true;
+      $('#forgot-step2').hidden = false;
+      f.code.required = f.new.required = true;
+      btn.textContent = 'Đổi mật khẩu';
+      $('#forgot-hint').textContent = r.message + ' Hãy kiểm tra cả mục Spam.';
+      f.code.focus();
+    } else {
+      const r = await api('POST', '/api/reset', { email: f.email.value, code: f.code.value, newPassword: f.new.value });
+      store.set('token', r.token);
+      $('#dlg-forgot').close();
+      toast('Đổi mật khẩu thành công');
+      enterHome(r.user);
+    }
+  } catch (ex) { err.textContent = ex.message; }
+  btn.disabled = false;
 });
 
 // Đổi mật khẩu
